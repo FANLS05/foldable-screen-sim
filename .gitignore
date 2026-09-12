@@ -1,0 +1,16 @@
+# 图片 / 数据 / 日志 / 缓存
+*.png
+*.jpg
+*.jpeg
+*.bmp
+*.npz
+*.csv
+
+# IDE / Python 缓存
+.vscode/
+__pycache__/
+*.pyc
+
+# 开发中间工具（非核心代码）
+collect.py
+wininfo.py
