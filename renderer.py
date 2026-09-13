@@ -5,6 +5,7 @@
 - 性能：半分辨率渲染 + 盒式模糊 + 完全展开快速路径。
 """
 import os
+import sys
 
 import cv2
 import numpy as np
@@ -59,6 +60,13 @@ def _resize_fill(img, w, h):
     return resized[y:y + h, x:x + w]
 
 
+def _base_dir():
+    """程序所在目录：打包成 EXE 后是 EXE 所在目录，否则是脚本所在目录。"""
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
+
+
 class FoldRenderer:
     def __init__(self, max_blur=260.0, feather=90.0, render_scale=0.5, fullscreen=False):
         self.width = 1280
@@ -100,7 +108,7 @@ class FoldRenderer:
 
     def _load_backdrop(self, frame):
         path = (BACKDROP_PATH if os.path.isabs(BACKDROP_PATH)
-                else os.path.join(os.path.dirname(os.path.abspath(__file__)), BACKDROP_PATH))
+                else os.path.join(_base_dir(), BACKDROP_PATH))
         if os.path.exists(path):
             # 用 np.fromfile + imdecode 规避中文路径下 cv2.imread 打不开的问题
             data = np.fromfile(path, dtype=np.uint8)
@@ -114,6 +122,41 @@ class FoldRenderer:
         small = cv2.GaussianBlur(small, (0, 0), 20)
         self.backdrop = (cv2.resize(small, (w, h), interpolation=cv2.INTER_LINEAR) * 0.5).astype(np.uint8)
         return False
+
+    def select_backdrop(self):
+        """弹出文件选择框，让用户选择本地图片作为后景。"""
+        try:
+            import tkinter as tk
+            from tkinter import filedialog
+            # 暂时最小化 pygame 窗口，避免全屏遮挡文件选择框
+            if self.screen is not None:
+                pygame.display.iconify()
+            root = tk.Tk()
+            root.withdraw()
+            root.attributes("-topmost", True)
+            path = filedialog.askopenfilename(
+                title="选择背景图片",
+                filetypes=[("图片文件", "*.png *.jpg *.jpeg *.bmp"), ("所有文件", "*.*")],
+            )
+            root.destroy()
+            # 恢复 pygame 窗口
+            if self.screen is not None:
+                flags = pygame.FULLSCREEN if self.fullscreen else 0
+                self.screen = pygame.display.set_mode((self.width, self.height), flags)
+                self._exclude_from_capture()
+            if not path:
+                return False
+            data = np.fromfile(path, dtype=np.uint8)
+            img = cv2.imdecode(data, cv2.IMREAD_COLOR)
+            if img is None:
+                print(f"[后景] 无法读取图片: {path}")
+                return False
+            self.backdrop = _resize_fill(img, self.width, self.height)
+            print(f"[后景] 已加载 {path}")
+            return True
+        except Exception as e:
+            print(f"[后景] 选择失败: {e}")
+            return False
 
     def recapture(self):
         """标定时重新截一次屏作为前景（静态），并重建后景。"""
@@ -212,7 +255,7 @@ class FoldRenderer:
         font = self._font
         hud_surf = font.render(hud, True, (0, 255, 0))
         self.screen.blit(hud_surf, (10, 10))
-        hint = "SPACE=标定+重截屏  D=调试  R=翻转  +/-=灵敏度  B=绿框  F11=全屏  ESC=退出"
+        hint = "SPACE=标定  O=选背景  D=调试  R=翻转  +/-=灵敏度  B=绿框  F11=全屏  ESC=退出"
         hint_surf = font.render(hint, True, (170, 170, 170))
         self.screen.blit(hint_surf, (10, self.height - 30))
         pygame.display.flip()

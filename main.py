@@ -13,7 +13,20 @@
     ESC/Q  退出（退出时把每帧耗时写入 timing_log.csv）
 """
 import csv
+import os
+import sys
 import time
+
+# 打包成 EXE（无控制台窗口）时 stdout/stderr 为 None，print 会崩溃；重定向到日志文件
+if sys.stdout is None or sys.stderr is None:
+    try:
+        _log = open(os.path.join(os.path.dirname(sys.executable), "fold_screen.log"), "w", encoding="utf-8")
+    except Exception:
+        _log = open(os.devnull, "w")
+    if sys.stdout is None:
+        sys.stdout = _log
+    if sys.stderr is None:
+        sys.stderr = _log
 
 import cv2
 import numpy as np
@@ -67,6 +80,8 @@ def main():
                         show_debug = not show_debug
                     elif k == pygame.K_b:
                         renderer.show_outline = not renderer.show_outline
+                    elif k == pygame.K_o:
+                        renderer.select_backdrop()
                     elif k == pygame.K_r:
                         SIGN = -SIGN
                         print(f"[参数] SIGN = {SIGN:+d}")
